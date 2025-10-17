@@ -1572,7 +1572,7 @@ class Prof1():
         args = parser.parse_args(tuneables)
 
         dst_url = args.dst_url
-        if dst_url == None:
+        if dst_url is None:
             dst_url = HostPort(args.dst_4, args.dst_port).encode()
 
         self.register_profiles(dst_url)

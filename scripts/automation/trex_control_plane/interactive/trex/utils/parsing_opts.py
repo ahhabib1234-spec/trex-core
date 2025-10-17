@@ -295,7 +295,30 @@ class ScapyDecoder(object):
         ScapyDecoder.init()
         
         try:
-            scapy_obj = eval(scapy_str, {'__builtins__': {}, 'True': True, 'False': False}, ScapyDecoder.scapy_layers)
+            # Create a safe evaluation environment with only allowed names
+            safe_dict = {}
+            safe_dict.update(ScapyDecoder.scapy_layers)
+            safe_dict.update({'True': True, 'False': False})
+            
+            # Use compile() with 'eval' mode to restrict to expressions only
+            # This prevents statements like assignments, imports, etc.
+            compiled_code = compile(scapy_str, '<scapy_expression>', 'eval')
+            
+            # Validate that the compiled code only uses allowed names
+            import ast
+            parsed = ast.parse(scapy_str, mode='eval')
+            
+            # Check for any potentially dangerous operations
+            for node in ast.walk(parsed):
+                if isinstance(node, (ast.Import, ast.ImportFrom, ast.Call)):
+                    # Allow only calls to known safe Scapy constructors
+                    if isinstance(node, ast.Call) and hasattr(node.func, 'id'):
+                        if node.func.id not in ScapyDecoder.scapy_layers:
+                            raise ValueError(f"Unsafe operation: {node.func.id}")
+                    elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                        raise ValueError("Import statements not allowed")
+            
+            scapy_obj = eval(compiled_code, {"__builtins__": {}}, safe_dict)
             len(scapy_obj)
             return scapy_obj
         except Exception as e:
