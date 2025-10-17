@@ -1100,7 +1100,7 @@ class STLProfile(object):
         # read the content
         with open(plain_file) as f:
             try:
-                data = json.load(f) if fmt == 'json' else yaml.load(f)
+                data = json.load(f) if fmt == 'json' else yaml.safe_load(f)
                 STLProfile.__flatten_json(data)
                 
             except (ValueError, yaml.parser.ParserError):

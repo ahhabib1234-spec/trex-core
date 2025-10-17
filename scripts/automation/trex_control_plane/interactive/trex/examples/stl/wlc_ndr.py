@@ -7,7 +7,7 @@ import yaml
 import time
 
 with open(sys.argv[1]) as f:
-    config_yaml = yaml.load(f.read())
+    config_yaml = yaml.safe_load(f)
 
 base_data = config_yaml['base']
 ports_data = config_yaml['ports']

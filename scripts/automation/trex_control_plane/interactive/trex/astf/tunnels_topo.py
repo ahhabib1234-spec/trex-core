@@ -275,7 +275,7 @@ class TunnelsTopo(object):
         with open(filename) as f:
             file_str = f.read()
 
-        data = yaml.load(file_str)
+        data = yaml.safe_load(file_str)
         return TunnelsTopo.from_data(data)
 
 
