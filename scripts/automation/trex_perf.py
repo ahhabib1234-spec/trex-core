@@ -54,7 +54,7 @@ class TrexRunException(Exception):
 ############################# utility functions start #################################
 
 def verify_glibc_version ():
-    x = subprocess.check_output("/usr/bin/ldd --version", shell=True)
+    x = subprocess.check_output(["/usr/bin/ldd", "--version"], shell=False)
     m = re.match("^ldd \([^\)]+\) (.*)", x)
     if not m:
         raise Exception("Cannot determine LDD version")
@@ -124,7 +124,11 @@ class TermMng:
 
 ############################# utility functions stop #################################
 
-def send_mail(send_from, send_to, subject, html_text, txt_attachments=[], images=[], server="localhost"):
+def send_mail(send_from, send_to, subject, html_text, txt_attachments=None, images=None, server="localhost"):
+    if txt_attachments is None:
+        txt_attachments = []
+    if images is None:
+        images = []
     assert isinstance(send_to, list)
     assert isinstance(txt_attachments, list)
     assert isinstance(images, list)
@@ -163,8 +167,8 @@ def send_mail(send_from, send_to, subject, html_text, txt_attachments=[], images
 
 # convert HTML to image - returning a image file as a string
 def html2image (html_filename, image_filename):
-    cmd = "./phantom/phantomjs ./phantom/rasterize.js {0} {1}".format(html_filename, image_filename)
-    subprocess.call(cmd, shell=True)
+    cmd = ["./phantom/phantomjs", "./phantom/rasterize.js", html_filename, image_filename]
+    subprocess.call(cmd, shell=False)
 
     assert os.path.exists(image_filename)
 

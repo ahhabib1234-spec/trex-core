@@ -1,16 +1,20 @@
 import yaml
 import collections
+try:
+    from collections.abc import Mapping  # Python 3
+except ImportError:
+    from collections import Mapping      # Python 2 fallback
 import os
 
 def load_config(filename=None):
     # Load default config
     with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "trex_wireless_default_config.yaml")) as f:
-        yaml_data_default = yaml.load(f)
+        yaml_data_default = yaml.safe_load(f)
 
     # Then open user's one if any
     if filename:
         with open(filename) as f:
-            yaml_data = yaml.load(f)
+            yaml_data = yaml.safe_load(f)
     else:
         yaml_data = {}
     return read_config(yaml_data, yaml_data_default)
@@ -46,7 +50,7 @@ def dict_merge(dct, merge_dct, add_keys=True):
 
     for k, v in merge_dct.items():
         if (k in dct and isinstance(dct[k], dict)
-                and isinstance(merge_dct[k], collections.Mapping)):
+                and isinstance(merge_dct[k], Mapping)):
             dct[k] = dict_merge(dct[k], merge_dct[k], add_keys=add_keys)
         else:
             dct[k] = merge_dct[k]
@@ -60,7 +64,7 @@ def read_config(yaml_data, default_yaml):
             nt = collections.namedtuple("config", mapping.keys())
             return nt(**mapping)
 
-        if isinstance(mapping, collections.Mapping):
+        if isinstance(mapping, Mapping):
             for key, value in mapping.items():
                 mapping[key] = mapping_to_namedtuple(value)
             return namedtuple_from_mapping(mapping)

@@ -7,6 +7,8 @@ import json
 import subprocess
 import time
 import os
+import errno
+import shlex
 
 class Cmds_server:
     def __init__(self, args):
@@ -56,13 +58,19 @@ class Cmds_server:
         return False, json.dumps({"returncode" : 0, "output": ''})
 
     def popen(self, request):
-        p = subprocess.Popen(request['cmd'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        output, err = p.communicate()
-        if p.returncode == 0:
-            answer = output
+        cmd = request.get('cmd')
+        # Accept either a string (to be safely split) or a list of args
+        if isinstance(cmd, str):
+            args = shlex.split(cmd)
+        elif isinstance(cmd, (list, tuple)):
+            args = list(cmd)
         else:
-            answer = err
-        return False, json.dumps({"returncode" : p.returncode, "output": answer.decode()})
+            return False, json.dumps({"returncode": -1, "output": "Invalid 'cmd' format; expected string or list"})
+
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+        output, err = p.communicate()
+        answer = output if p.returncode == 0 else err
+        return False, json.dumps({"returncode": p.returncode, "output": answer.decode()})
 
 
 def main(args):
