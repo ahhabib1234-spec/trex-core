@@ -89,7 +89,7 @@ def cpu_histo_to_str (cpu_histo):
         cluster += (10 - len(cluster)) * [None]
 
         for x in cluster:
-            if (x != None):
+            if x is not None:
                 line += "%5.1f%%, " % x
             else:
                 line += "        "
@@ -268,12 +268,12 @@ class JobReporter:
         output +=  "Email Report:      {0}\n".format(self.job_summary['email'])
         output +=  "Job Total Time:    {0}\n\n".format(self.job_summary['total_run_time'])
 
-        if (self.job_summary.get('find_results') != None):
+        if self.job_summary.get('find_results') is not None:
             find_results = self.job_summary['find_results']
             output += ("Maximum BW Point Details:\n\n")
             output += run_results_to_str(find_results, self.job_summary['cond_type'])
             
-        if (self.job_summary.get('plot_results') != None):
+        if self.job_summary.get('plot_results') is not None:
             plot_results = self.job_summary['plot_results']
             output += self.__plot_results_to_str(plot_results)
 
@@ -317,7 +317,7 @@ class JobReporter:
 
         find_results = self.job_summary['find_results']
 
-        if find_results != None:
+        if find_results is not None:
             job_summary_table.add_row("Maximum Bandwidth", "{0:,.2f} [Mbps]".format(find_results['tx']))
             job_summary_table.add_row("Maximum PPS", "{0:,} [pkts]".format(int(find_results['total-pps'])))
             job_summary_table.add_row("CPU Util.", "{0:.2f}%".format(find_results['cpu_util']))
@@ -650,7 +650,7 @@ def _trex_run (job_summary, m, duration):
 
     p.stop()
 
-    if (results == None):
+    if results is None:
         raise Exception("Failed to run Trex")
 
     # fetch values

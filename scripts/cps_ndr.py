@@ -570,7 +570,15 @@ def main():
                 trex.stop()
                 if args.reset_command:
                     debug(f"... executing `{args.reset_command}` ...")
-                    subprocess.call(args.reset_command, shell=True)
+                    # Use shlex.split to safely parse the command and avoid shell injection
+                    import shlex
+                    try:
+                        cmd_args = shlex.split(args.reset_command)
+                        subprocess.call(cmd_args, shell=False)
+                    except ValueError as e:
+                        debug(f"Error parsing reset command: {e}")
+                        # Fallback: log the error but don't execute potentially unsafe command
+                        debug("Skipping reset command execution due to parsing error")
                 else:
                     time.sleep(args.ramp_up)
                 trex.start(mult)
