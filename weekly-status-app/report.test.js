@@ -285,6 +285,29 @@ test("yearless dates inside a week that crosses New Year stay in range", () => {
   assert.equal(report.excluded, 0);
 });
 
+test("a timestamp directly above a Teams message dates that message", () => {
+  const report = R.buildReport({
+    ...WEEK,
+    sources: [
+      {
+        name: "Teams",
+        kind: "chat",
+        text: [
+          "Sam Patel 11/10/2026 9:14 AM",
+          "The lab switch firmware is blocked waiting on vendor signature.",
+          "",
+          "Sam Patel 11/02/2026 9:14 AM",
+          "The old rollout is blocked and should not appear this week.",
+        ].join("\n"),
+      },
+    ],
+  });
+  assert.equal(report.groups.blockers.length, 1);
+  assert.equal(report.groups.blockers[0].day, "2026-11-10");
+  assert.match(report.groups.blockers[0].text, /lab switch firmware/);
+  assert.equal(report.excluded, 1);
+});
+
 test("a date or ratio inside a message does not replace the day it was sent", () => {
   const report = R.buildReport({
     ...WEEK,

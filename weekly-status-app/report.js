@@ -185,6 +185,18 @@
     return lines.length ? findDate(lines.join("\n"), defaultYear, range) : null;
   }
 
+  function isTimestampLine(line, found) {
+    const rest = line
+      .replace(found.raw, " ")
+      .replace(TIME_RE, " ")
+      .replace(WEEKDAY_RE, " ")
+      .replace(/[\s:,|()\-–—]+/g, " ")
+      .trim();
+    if (!rest) return true;
+    const words = rest.split(" ");
+    return words.length <= 3 && words.every((word) => /^[A-Z][\w.'-]*$/.test(word));
+  }
+
   function parseItems(text, source, defaultYear, range) {
     const items = [];
     let dayHeader = null;
@@ -194,9 +206,11 @@
         dayHeader = found.day;
         continue;
       }
-      const dated = headerDate(block, defaultYear, range);
+      const stamp = found && isTimestampLine(block[0], found) ? found : null;
+      const dated = headerDate(block, defaultYear, range) || stamp;
       const subjectLine = block.find((line) => SUBJECT_RE.test(line));
-      const body = block.filter((line) => !HEADER_RE.test(line)).join("\n").trim();
+      const contentLines = stamp ? block.slice(1) : block;
+      const body = contentLines.filter((line) => !HEADER_RE.test(line)).join("\n").trim();
       if (!body) continue;
       items.push({
         source,
