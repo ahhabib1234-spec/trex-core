@@ -212,14 +212,14 @@
       }
       const stamp = found && isTimestampLine(block[0], found) ? found : null;
       const leading = !stamp && found && found.index === 0 ? found : null;
-      const dated = headerDate(block, defaultYear, range) || stamp || leading;
+      const sent = headerDate(block, defaultYear, range) || stamp;
       const subjectLine = block.find((line) => SUBJECT_RE.test(line));
       const contentLines = stamp ? block.slice(1) : block;
       const body = contentLines.filter((line) => !HEADER_RE.test(line)).join("\n").trim();
       if (!body) continue;
       items.push({
         source,
-        day: dated ? dated.day : dayHeader,
+        day: sent ? sent.day : dayHeader || (leading ? leading.day : null),
         subject: subjectLine ? subjectLine.replace(SUBJECT_RE, "").trim() : "",
         section: "",
         text: body,

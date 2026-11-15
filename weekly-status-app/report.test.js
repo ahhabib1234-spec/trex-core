@@ -309,6 +309,22 @@ test("a title-case note that mentions a date is kept and classified", () => {
   assert.notEqual(report.status.level, "UNKNOWN");
 });
 
+test("a day header wins over a date at the start of a message under it", () => {
+  const report = R.buildReport({
+    ...WEEK,
+    sources: [
+      {
+        name: "Teams",
+        kind: "chat",
+        text: ["Tuesday, November 10, 2026", "", "December 30 freeze was blocked by the change board."].join("\n"),
+      },
+    ],
+  });
+  assert.equal(report.groups.blockers.length, 1);
+  assert.equal(report.groups.blockers[0].day, "2026-11-10");
+  assert.equal(report.excluded, 0);
+});
+
 test("a timestamp directly above a Teams message dates that message", () => {
   const report = R.buildReport({
     ...WEEK,
