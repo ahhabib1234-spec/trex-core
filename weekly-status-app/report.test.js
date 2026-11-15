@@ -285,6 +285,30 @@ test("yearless dates inside a week that crosses New Year stay in range", () => {
   assert.equal(report.excluded, 0);
 });
 
+test("a title-case note that mentions a date is kept and classified", () => {
+  const report = R.buildReport({
+    ...WEEK,
+    sources: [
+      {
+        name: "Notes",
+        kind: "chat",
+        text: [
+          "Controller Upgrade Blocked November 10",
+          "",
+          "November 10 Lab Switch Failed",
+          "Waiting on the vendor signature for the replacement.",
+        ].join("\n"),
+      },
+    ],
+  });
+  const texts = report.groups.blockers.map((entry) => entry.text);
+  assert.ok(texts.some((text) => text.startsWith("Controller Upgrade Blocked")));
+  assert.ok(texts.some((text) => text.startsWith("November 10 Lab Switch Failed")));
+  assert.equal(report.groups.blockers.find((entry) => entry.text.startsWith("November 10")).day, "2026-11-10");
+  assert.notEqual(report.status.level, "GREEN");
+  assert.notEqual(report.status.level, "UNKNOWN");
+});
+
 test("a timestamp directly above a Teams message dates that message", () => {
   const report = R.buildReport({
     ...WEEK,

@@ -193,6 +193,10 @@
       .replace(/[\s:,|()\-–—]+/g, " ")
       .trim();
     if (!rest) return true;
+    // A leftover name counts only when the line also has a clock time, as in
+    // "Sam Patel 11/10/2026 9:14 AM". A title-case note that merely mentions a
+    // date ("Controller Upgrade Blocked November 10") is content.
+    if (!/\b\d{1,2}:\d{2}/.test(line)) return false;
     const words = rest.split(" ");
     return words.length <= 3 && words.every((word) => /^[A-Z][\w.'-]*$/.test(word));
   }
@@ -207,7 +211,8 @@
         continue;
       }
       const stamp = found && isTimestampLine(block[0], found) ? found : null;
-      const dated = headerDate(block, defaultYear, range) || stamp;
+      const leading = !stamp && found && found.index === 0 ? found : null;
+      const dated = headerDate(block, defaultYear, range) || stamp || leading;
       const subjectLine = block.find((line) => SUBJECT_RE.test(line));
       const contentLines = stamp ? block.slice(1) : block;
       const body = contentLines.filter((line) => !HEADER_RE.test(line)).join("\n").trim();
