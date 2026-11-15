@@ -4,7 +4,8 @@ const R = require("./report.js");
 
 test("findDate understands common date formats", () => {
   assert.equal(R.findDate("Sent: Tuesday, November 10, 2026 9:14 AM", 2026).day, "2026-11-10");
-  assert.equal(R.findDate("ship it on 11/12", 2026).day, "2026-11-12");
+  assert.equal(R.findDate("ship it on 11/12/2026", 2026).day, "2026-11-12");
+  assert.equal(R.findDate("11/12", 2026).day, "2026-11-12");
   assert.equal(R.findDate("review 2026-11-09 agenda", 2026).day, "2026-11-09");
   assert.equal(R.findDate("Nov 9 sync", 2026).day, "2026-11-09");
   assert.equal(R.findDate("due 12th November", 2026).day, "2026-11-12");
@@ -15,6 +16,9 @@ test("findDate ignores text that is not a date", () => {
   assert.equal(R.findDate("version 3.0.7 is out", 2026), null);
   assert.equal(R.findDate("may 2026 roadmap", 2026), null);
   assert.equal(R.findDate("we may be late", 2026), null);
+  assert.equal(R.findDate("ship it on 11/12", 2026), null);
+  assert.equal(R.findDate("1/2 of the nodes failed", 2026), null);
+  assert.equal(R.findDate("the ratio is 3/4", 2026), null);
 });
 
 test("findDate rejects impossible dates", () => {
@@ -225,4 +229,87 @@ test("toMarkdown renders every section and source coverage", () => {
   assert.match(md, /## Accomplishments\n- The controller upgrade was completed on the lab cluster\. \[Sam\] _\(Teams, 2026-11-10\)_/);
   assert.match(md, /## Blockers and risks\n- None found in the provided sources\./);
   assert.match(md, /## Source coverage\n- Teams: 1 item\(s\) used, 0 outside the date range/);
+});
+
+test("Outlook original-message divider keeps the quoted thread on its own date", () => {
+  const text = [
+    "From: Dana Lee",
+    "Sent: Wednesday, November 11, 2026 8:00 AM",
+    "To: Sam Patel",
+    "Subject: Controller upgrade",
+    "",
+    "The lab upgrade is blocked on switch firmware.",
+    "",
+    "-----Original Message-----",
+    "From: Sam Patel",
+    "To: Dana Lee",
+    "Cc: Ops",
+    "Sent: Monday, November 2, 2026 8:00 AM",
+    "Subject: Old thread",
+    "",
+    "The old rollout was completed last month and should stay out of this week.",
+  ].join("\n");
+  const report = R.buildReport({
+    ...WEEK,
+    sources: [{ name: "Outlook", kind: "email", text }],
+  });
+  assert.equal(report.groups.blockers.length, 1);
+  assert.match(report.groups.blockers[0].text, /blocked on switch firmware/);
+  assert.equal(report.groups.blockers[0].day, "2026-11-11");
+  assert.equal(report.groups.done.length, 0);
+  assert.equal(report.excluded, 1);
+});
+
+test("yearless dates inside a week that crosses New Year stay in range", () => {
+  const report = R.buildReport({
+    start: "2026-12-29",
+    end: "2027-01-04",
+    sources: [
+      {
+        name: "Teams",
+        kind: "chat",
+        text: [
+          "December 30",
+          "",
+          "Sam: The freeze window was completed.",
+          "",
+          "January 2",
+          "",
+          "Sam: The controller cutover is blocked on the change window.",
+        ].join("\n"),
+      },
+    ],
+  });
+  assert.equal(report.groups.done[0].day, "2026-12-30");
+  assert.equal(report.groups.blockers[0].day, "2027-01-02");
+  assert.equal(report.excluded, 0);
+});
+
+test("a date or ratio inside a message does not replace the day it was sent", () => {
+  const report = R.buildReport({
+    ...WEEK,
+    sources: [
+      {
+        name: "Teams",
+        kind: "chat",
+        text: [
+          "Tuesday, November 10, 2026",
+          "",
+          "Sam: The rollout is blocked until December 20 and 1/2 of the nodes failed.",
+        ].join("\n"),
+      },
+      {
+        name: "Atlassian",
+        kind: "page",
+        text: "The upgrade is blocked and 1/2 of the lab nodes failed ahead of the December 20 window.",
+      },
+    ],
+  });
+  assert.equal(report.groups.blockers.length, 2);
+  assert.equal(report.excluded, 0);
+  assert.equal(report.status.level, "AMBER");
+  const teams = report.groups.blockers.find((entry) => entry.sources.includes("Teams"));
+  const page = report.groups.blockers.find((entry) => entry.sources.includes("Atlassian"));
+  assert.equal(teams.day, "2026-11-10");
+  assert.equal(page.day, null);
 });

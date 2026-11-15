@@ -23,13 +23,19 @@
       parts: (m) => [m[3], monthIndex(m[2]), m[1]],
     },
     {
-      re: /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{4}|\d{2}))?\b/,
+      re: /\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/,
       parts: (m) => [m[3], Number(m[1]) - 1, m[2]],
+    },
+    {
+      re: /\b(\d{1,2})\/(\d{1,2})\b/,
+      parts: (m) => [undefined, Number(m[1]) - 1, m[2]],
+      bareSlash: true,
     },
   ];
 
   const HEADER_RE = /^\s*(from|sent|to|cc|bcc|subject|date|importance)\s*:/i;
-  const SEPARATOR_RE = /^\s*([-_=*~]{3,}|original message)\s*$/i;
+  const SENT_RE = /^\s*(sent|date)\s*:/i;
+  const SEPARATOR_RE = /^\s*(?:[-_=*~]{3,}|(?:[-_=*~]+\s*)?original message(?:\s*[-_=*~]+)?)\s*$/i;
   const SUBJECT_RE = /^\s*subject\s*:\s*/i;
   const WEEKDAY_RE = /\b(mon|tue|tues|wed|thu|thur|thurs|fri|sat|sun)[a-z]*\.?,?/gi;
   const TIME_RE = /\b\d{1,2}:\d{2}(\s*[ap]\.?m\.?)?/gi;
@@ -71,18 +77,60 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   }
 
-  function findDate(text, defaultYear) {
+  function dayDistance(a, b) {
+    const [ay, am, ad] = a.split("-").map(Number);
+    const [by, bm, bd] = b.split("-").map(Number);
+    return Math.abs(Date.UTC(ay, am - 1, ad) - Date.UTC(by, bm - 1, bd)) / 86400000;
+  }
+
+  function resolveYear(month, day, rawYear, fallbackYear, range) {
+    if (rawYear !== undefined && rawYear !== "") {
+      return String(rawYear).length === 2 ? 2000 + Number(rawYear) : Number(rawYear);
+    }
+    if (!range || !range.start || !range.end) return fallbackYear;
+
+    const startYear = Number(range.start.slice(0, 4));
+    const endYear = Number(range.end.slice(0, 4));
+    let inRange = null;
+    let closest = null;
+    for (let y = startYear - 1; y <= endYear + 1; y++) {
+      const date = new Date(y, month, day);
+      if (date.getMonth() !== month || date.getDate() !== day) continue;
+      const key = dayKey(date);
+      if (key >= range.start && key <= range.end) {
+        inRange = y;
+        continue;
+      }
+      const distance = dayDistance(key, key < range.start ? range.start : range.end);
+      if (!closest || distance < closest.distance) closest = { y, distance };
+    }
+    if (inRange !== null) return inRange;
+    return closest ? closest.y : fallbackYear;
+  }
+
+  function bareSlashIsDate(text, match) {
+    const lineStart = text.lastIndexOf("\n", match.index - 1) + 1;
+    const lineEnd = text.indexOf("\n", match.index);
+    const line = text.slice(lineStart, lineEnd === -1 ? text.length : lineEnd);
+    const rest = line
+      .replace(match[0], " ")
+      .replace(WEEKDAY_RE, " ")
+      .replace(TIME_RE, " ")
+      .replace(/\b(sent|date)\b/gi, " ")
+      .replace(/[^a-z]/gi, "");
+    return rest.length < 3;
+  }
+
+  function findDate(text, defaultYear, range) {
     const year = defaultYear ?? new Date().getFullYear();
     let best = null;
-    for (const { re, parts } of DATE_PATTERNS) {
-      const m = re.exec(text);
+    for (const pattern of DATE_PATTERNS) {
+      const m = pattern.re.exec(text);
       if (!m) continue;
-      const [rawYear, month, rawDay] = parts(m);
+      if (pattern.bareSlash && !bareSlashIsDate(text, m)) continue;
+      const [rawYear, month, rawDay] = pattern.parts(m);
       const day = Number(rawDay);
-      let fullYear = year;
-      if (rawYear !== undefined) {
-        fullYear = String(rawYear).length === 2 ? 2000 + Number(rawYear) : Number(rawYear);
-      }
+      const fullYear = resolveYear(month, day, rawYear, year, range);
       const date = new Date(fullYear, month, day);
       if (Number.isNaN(date.getTime()) || date.getMonth() !== month || date.getDate() !== day) continue;
       if (!best || m.index < best.index) {
@@ -132,21 +180,27 @@
     return rest.length < 3;
   }
 
-  function parseItems(text, source, defaultYear) {
+  function headerDate(block, defaultYear, range) {
+    const lines = block.filter((line) => SENT_RE.test(line));
+    return lines.length ? findDate(lines.join("\n"), defaultYear, range) : null;
+  }
+
+  function parseItems(text, source, defaultYear, range) {
     const items = [];
     let dayHeader = null;
     for (const block of splitBlocks(text)) {
-      const found = findDate(block.slice(0, 3).join("\n"), defaultYear);
+      const found = findDate(block[0] || "", defaultYear, range);
       if (isDateOnlyBlock(block, found)) {
         dayHeader = found.day;
         continue;
       }
+      const dated = headerDate(block, defaultYear, range);
       const subjectLine = block.find((line) => SUBJECT_RE.test(line));
       const body = block.filter((line) => !HEADER_RE.test(line)).join("\n").trim();
       if (!body) continue;
       items.push({
         source,
-        day: found ? found.day : dayHeader,
+        day: dated ? dated.day : dayHeader,
         subject: subjectLine ? subjectLine.replace(SUBJECT_RE, "").trim() : "",
         section: "",
         text: body,
@@ -155,7 +209,7 @@
     return items;
   }
 
-  function parseConfluence(text, source, defaultYear) {
+  function parseConfluence(text, source, defaultYear, range) {
     const items = [];
     let section = "";
     for (const raw of String(text || "").replace(/\r\n?/g, "\n").split("\n")) {
@@ -169,8 +223,10 @@
         section = heading[1].trim();
         continue;
       }
-      const found = findDate(line, defaultYear);
-      items.push({ source, day: found ? found.day : null, subject: "", section, text: line });
+      const stripped = line.replace(/^(?:[-*•]|\d+[.)])\s+/, "");
+      const found = findDate(stripped, defaultYear, range);
+      const leading = found && found.index === 0 ? found : null;
+      items.push({ source, day: leading ? leading.day : null, subject: "", section, text: line });
     }
     return items;
   }
@@ -228,6 +284,7 @@
 
   function buildReport({ start, end, sources, defaultYear }) {
     const year = defaultYear ?? Number(start.slice(0, 4));
+    const range = { start, end };
     const entries = new Map();
     const sourceStats = [];
     let excluded = 0;
@@ -237,7 +294,9 @@
       const text = String(src.text || "").trim();
       if (!text) continue;
       const items =
-        src.kind === "page" ? parseConfluence(text, src.name, year) : parseItems(text, src.name, year);
+        src.kind === "page"
+          ? parseConfluence(text, src.name, year, range)
+          : parseItems(text, src.name, year, range);
       const stat = { name: src.name, items: items.length, used: 0, excluded: 0 };
 
       for (const item of items) {
